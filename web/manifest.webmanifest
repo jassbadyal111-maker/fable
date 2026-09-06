@@ -1,0 +1,10 @@
+{
+  "name": "Fable AI",
+  "short_name": "Fable",
+  "description": "A fast streaming AI chat PWA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": []
+}
