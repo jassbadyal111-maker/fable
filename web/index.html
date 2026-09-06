@@ -1,64 +1,14 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
-  <meta name="description" content="Fable AI chat" />
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="stylesheet" href="/styles.css" />
-  <title>Fable</title>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/><meta name="theme-color" content="#ffffff"/><meta name="description" content="Fable AI chat"/><link rel="manifest" href="/manifest.webmanifest"/><link rel="stylesheet" href="/styles.css"/><title>Fable</title>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-top">
-        <button class="new-chat" id="newChatBtn">＋ <span>New chat</span></button>
-        <button class="icon-btn sidebar-close" id="closeSidebar" aria-label="Close sidebar">×</button>
-      </div>
-      <div class="history-label">Chats</div>
-      <div class="chat-list" id="chatList"></div>
-      <div class="sidebar-bottom">
-        <div class="model-wrap">
-          <label for="modelSelect">Model</label>
-          <select id="modelSelect"></select>
-        </div>
-        <button class="theme-btn" id="themeBtn"><span id="themeIcon">☾</span><span id="themeText">Dark mode</span></button>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-        <button class="icon-btn menu-btn" id="openSidebar" aria-label="Open sidebar">☰</button>
-        <button class="model-switch" id="modelSwitch" aria-label="Switch model"><span class="brand-dot"></span><span id="modelLabel">Fable</span><span class="chevron">⌄</span></button>
-        <div class="top-actions"><button class="icon-btn" id="topTheme" aria-label="Toggle theme">☾</button></div>
-      </header>
-
-      <section class="conversation" id="conversation">
-        <div class="welcome" id="welcome">
-          <div class="welcome-mark">F</div>
-          <h1>How can I help?</h1>
-          <p>Ask anything. Your chats stay available in this browser.</p>
-        </div>
-      </section>
-
-      <form class="composer-wrap" id="composer">
-        <div class="composer">
-          <textarea id="input" rows="1" placeholder="Message Fable..." autocomplete="off"></textarea>
-          <button class="send-btn" id="sendBtn" type="submit" aria-label="Send"><span id="sendIcon">↑</span></button>
-        </div>
-        <div class="composer-note">Fable can make mistakes. Check important information.</div>
-      </form>
-    </main>
-  </div>
-
-  <div class="modal-backdrop hidden" id="modalBackdrop">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <h2 id="modalTitle">Delete chat?</h2>
-      <p id="modalText">This will permanently delete this conversation.</p>
-      <div class="modal-actions"><button class="modal-cancel" id="modalCancel">Cancel</button><button class="modal-danger" id="modalConfirm">Delete</button></div>
-    </div>
-  </div>
-  <script src="/app.js"></script>
-</body>
-</html>
+<div class="app-shell">
+<aside class="sidebar" id="sidebar"><div class="sidebar-top"><button class="new-chat" id="newChatBtn">＋ <span>New chat</span></button><button class="icon-btn sidebar-close" id="closeSidebar">×</button></div><div class="history-label">Chats</div><div class="chat-list" id="chatList"></div><div class="sidebar-bottom"><button class="theme-btn" id="themeBtn"><span id="themeIcon">☾</span><span id="themeText">Dark mode</span></button><button class="settings-btn" id="settingsBtn">⚙ <span>Settings</span></button></div></aside>
+<main class="main"><header class="topbar"><button class="icon-btn menu-btn" id="openSidebar">☰</button><button class="model-switch" id="modelSwitch"><span class="brand-dot"></span><span id="modelLabel">Fable</span><span>⌄</span></button><div class="top-actions"><button class="icon-btn" id="topTheme">☾</button></div></header>
+<section class="conversation" id="conversation"><div class="welcome" id="welcome"><div class="welcome-mark">F</div><h1>How can I help?</h1><p>Ask anything. Your chats are saved in this browser.</p></div></section>
+<form class="composer-wrap" id="composer"><div class="composer"><textarea id="input" rows="1" placeholder="Message Fable..." autocomplete="off"></textarea><button class="send-btn" id="sendBtn" type="submit" aria-label="Send"><span>↑</span></button></div><div class="composer-note">Shift+Enter for a new line</div></form></main></div>
+<div class="modal-backdrop hidden" id="modalBackdrop"><div class="modal" role="dialog"><h2 id="modalTitle">Delete chat?</h2><p>This will permanently delete this conversation.</p><div class="modal-actions"><button class="modal-cancel" id="modalCancel">Cancel</button><button class="modal-danger" id="modalConfirm">Delete</button></div></div></div>
+<div class="settings-backdrop hidden" id="settingsBackdrop"><div class="settings" role="dialog" aria-modal="true"><div class="settings-head"><h2>Settings</h2><button class="icon-btn" id="settingsClose">×</button></div><label>Max output tokens<input id="maxTokens" type="number" min="1" max="200000" step="1"></label><p class="setting-help">Maximum number of tokens requested for each response.</p><label>System prompt<textarea id="systemPrompt" rows="8"></textarea></label><p class="setting-help">Applied to new responses. Stored locally in this browser.</p><button class="save-settings" id="saveSettings">Save settings</button></div></div>
+<script src="/app.js"></script></body></html>
