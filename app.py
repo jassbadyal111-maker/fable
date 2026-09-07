@@ -12,9 +12,9 @@ BASE_DIR=Path(__file__).resolve().parent
 DB_PATH=BASE_DIR/'fable.db'
 WEB_DIR=BASE_DIR/'web'
 API_KEY=os.getenv('EXPLABS_API_KEY')
-BASE_URL=os.getenv('EXPLABS_BASE_URL','https://api.experientiallabs.ai/v1').rstrip('/')
-CATALOG_URL=os.getenv('EXPLABS_CATALOG_URL','https://api.experientiallabs.ai/api').rstrip('/')
-FALLBACK_MODELS=[x.strip() for x in os.getenv('FABLE_MODELS','claude-fable-5.1').split(',') if x.strip()]
+BASE_URL=os.getenv('EXPLABS_BASE_URL','https://api.apinex.bond/v1').rstrip('/')
+CATALOG_URL=os.getenv('EXPLABS_CATALOG_URL','https://api.apinex.bond/api').rstrip('/')
+FALLBACK_MODELS=[x.strip() for x in os.getenv('FABLE_MODELS','free/gpt-5.6-luna').split(',') if x.strip()]
 DEFAULT_MODEL=os.getenv('FABLE_DEFAULT_MODEL',FALLBACK_MODELS[0])
 DEFAULT_MAX_TOKENS=int(os.getenv('FABLE_MAX_TOKENS','4096'))
 DEFAULT_SYSTEM_PROMPT=os.getenv('FABLE_SYSTEM_PROMPT','You are Fable, a helpful AI assistant. Be direct, accurate, and conversational.')
@@ -86,7 +86,7 @@ def normalize_model(slug):
     raw=catalog_detail(slug);limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {};limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
     max_output=first_int(raw.get('max_output'),raw.get('max_output_tokens'),raw.get('max_tokens'),limits.get('max_output'),limits.get('max_output_tokens'),limits.get('max_tokens'),limit.get('output'),limit.get('max_output'),limit.get('max_tokens'),raw.get('max_output_limit'),raw.get('output_limit'),DEFAULT_MAX_TOKENS)
     context=first_int(raw.get('context'),raw.get('context_window'),raw.get('max_context'),limits.get('context'),limits.get('context_window'),limit.get('context'),limit.get('context_window'))
-    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':False,'reasoning_levels':[],'reasoning_default':None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
+    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':False,'reasoning_levels':[],'reasoning_default':None,'catalog_url':f'https://api.apinex.bond/v1/models/{slug}'}
 
 def create_chat(model):
     cid=str(uuid.uuid4());t=now()
