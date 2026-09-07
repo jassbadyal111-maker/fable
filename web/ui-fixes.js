@@ -41,6 +41,23 @@
   }
 
   const theme=$('topTheme');if(theme){theme.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.7A8.5 8.5 0 0 1 9.3 3.5 8.6 8.6 0 1 0 20.5 14.7Z"/></svg>';theme.classList.add('vector-icon')}
-  const settingsIcon=$('settingsBtn');if(settingsIcon){const old=settingsIcon.querySelector('span');if(old)old.outerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm8.2 3.6c0-.6-.1-1.2-.2-1.8l1.7-1.3-1.9-3.2-2 .8a8.5 8.5 0 0 0-3.1-1.8L14.4 2h-3.8l-.3 2.7a8.5 8.5 0 0 0-3.1 1.8l-2-.8-1.9 3.2L5 10.2A8 8 0 0 0 4.8 12c0 .6.1 1.2.2 1.8l-1.7 1.3 1.9 3.2 2-.8a8.5 8.5 0 0 0 3.1 1.8l.3 2.7a8.5 8.5 0 0 0 3.8 0l.3-2.7a8.5 8.5 0 0 0 3.1-1.8l2 .8 1.9-3.2-1.7-1.3c.1-.6.2-1.2.2-1.8Z"/></svg>';settingsIcon.classList.add('vector-icon')}
+  const settingsIcon=$('settingsBtn');if(settingsIcon){const old=settingsIcon.querySelector('span');if(old)old.outerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm8.2 3.6c0-.6-.1-1.2-.2-1.8l1.7-1.3-1.9-3.2-2 .8a8.5 8.5 0 0 0-3.1-1.8L14.4 2h-3.8l-.3 2.7a8.5 8.5 0 0 0-3.1 1.8l-2-.8-1.9 3.2L5 10.2A8 8 0 0 0 4.8 12c0 .6.1 1.2.2 1.8l-1.7 1.3 1.9 3.2 2-.8a8.5 8.5 0 0 0 3.1 1.8l.3 2.7a8.5 8.5 0 0 0 3.8 0l.3-2.7a8.5 8.5 0 0 0 3.1-1.8l2 .8 1.9 3.2-2 .8a8.5 8.5 0 0 0 3.1-1.8l2 .8 1.9-3.2-1.7-1.3c.1-.6.2-1.2.2-1.8Z"/></svg>';settingsIcon.classList.add('vector-icon')}
   document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(settings&&!settings.classList.contains('hidden'))closeSettingsSafe();popover?.classList.add('hidden');document.querySelector('.chat-action-menu')?.remove()});
+
+  // Reasoning UI is intentionally removed from the product surface.
+  const removeReasoningUI=()=>document.querySelectorAll('#reasoningSetting,.reasoning-box,.composer-reasoning,.reasoning-disclaimer,.reasoning-live').forEach(el=>el.remove());
+  removeReasoningUI();
+
+  // Keep the three-dot typing indicator only until the first real output token appears.
+  const stopTypingWhenOutputStarts=()=>{
+    if(!conversation)return;
+    conversation.querySelectorAll('.message.assistant').forEach(message=>{
+      const answer=message.querySelector('.answer-body');
+      const typing=message.querySelector('.typing');
+      if(answer&&typing&&answer.textContent.trim())typing.remove();
+    });
+  };
+  const outputObserver=new MutationObserver(stopTypingWhenOutputStarts);
+  outputObserver.observe(conversation,{childList:true,subtree:true,characterData:true});
+  stopTypingWhenOutputStarts();
 })();
