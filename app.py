@@ -125,6 +125,7 @@ def normalize_model(slug):
     reasoning_levels = []
     reasoning_default = raw.get("reasoning_default") or raw.get("default_reasoning_effort")
     reasoning_supported = False
+    known_levels = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
     if isinstance(reasoning, dict):
         reasoning_levels = (
             reasoning.get("levels")
@@ -133,6 +134,8 @@ def normalize_model(slug):
             or reasoning.get("efforts")
             or []
         )
+        if not reasoning_levels:
+            reasoning_levels = [key for key in reasoning if str(key).lower() in known_levels]
         reasoning_default = reasoning_default or reasoning.get("default") or reasoning.get("default_effort")
         reasoning_supported = bool(reasoning.get("supported", True))
     elif isinstance(reasoning, list):
@@ -145,9 +148,6 @@ def normalize_model(slug):
         reasoning_levels = [x.strip() for x in reasoning_levels.split(",") if x.strip()]
     reasoning_levels = [str(x).lower() for x in reasoning_levels if str(x).strip()]
     supports_reasoning = bool(reasoning_supported or reasoning_levels or "reasoning_effort" in params or "reasoning" in params)
-    if supports_reasoning and not reasoning_levels:
-        # Only use this fallback when the catalog explicitly says the model supports reasoning.
-        reasoning_levels = ["low", "medium", "high"]
     if reasoning_default is None and reasoning_levels:
         reasoning_default = "medium" if "medium" in reasoning_levels else reasoning_levels[0]
 
