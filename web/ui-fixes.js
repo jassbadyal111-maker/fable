@@ -3,21 +3,33 @@
   const conversation = $('conversation');
   const settings = $('settingsBackdrop');
 
-  function openSettingsSafe() {
+  async function openSettingsSafe() {
     try { window.updateModelControls?.(); } catch (_) {}
-    const model = window.currentModel?.();
+    const appState = window.fableState;
+    const modelId = localStorage.getItem('fable-model') || appState?.config?.default_model || '';
+    const model = appState?.config?.models?.find(m => m.id === modelId);
+    if (modelId) {
+      try {
+        const r = await fetch(`/api/model/${encodeURIComponent(modelId)}`, { headers: { Accept: 'application/json' } });
+        if (r.ok) {
+          const cap = await r.json();
+          if (model) Object.assign(model, cap);
+        }
+      } catch (_) {}
+    }
+    try { window.updateModelControls?.(); } catch (_) {}
+    const active = appState?.config?.models?.find(m => m.id === modelId) || model;
     const max = $('maxTokens'), range = $('tokenRange'), value = $('tokenValue');
     const prompt = $('systemPrompt'), modelSelect = $('settingsModel');
-    if (model) {
-      const cap = Math.max(256, Number(model.max_output) || 32768);
+    if (active) {
+      const cap = Math.max(256, Number(active.max_output) || 32768);
       const stored = Number(localStorage.getItem('fable-max-tokens'));
       const n = Number.isFinite(stored) ? Math.min(Math.max(stored, 256), cap) : Math.min(4096, cap);
       if (max) { max.max = cap; max.value = n; }
       if (range) { range.max = cap; range.value = n; range.step = cap >= 10000 ? 256 : 1; }
       if (value) value.value = n;
-      if (modelSelect) modelSelect.value = model.id;
+      if (modelSelect) modelSelect.value = active.id;
     }
-    const appState = window.fableState;
     if (prompt) prompt.value = localStorage.getItem('fable-system-prompt') ?? (appState?.config?.default_system_prompt || '');
     settings?.classList.remove('hidden');
     document.body.classList.add('settings-open');
