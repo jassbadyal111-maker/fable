@@ -22,7 +22,7 @@
     const max = $('maxTokens'), range = $('tokenRange'), value = $('tokenValue');
     const prompt = $('systemPrompt'), modelSelect = $('settingsModel');
     if (active) {
-      const cap = Math.max(256, Number(active.max_output) || 32768);
+      const cap = Math.max(256, Number(active.max_output) || Number(max?.max) || 32768);
       const stored = Number(localStorage.getItem('fable-max-tokens'));
       const n = Number.isFinite(stored) ? Math.min(Math.max(stored, 256), cap) : Math.min(4096, cap);
       if (max) { max.max = cap; max.value = n; }
@@ -42,6 +42,20 @@
   $('settingsBtn')?.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); openSettingsSafe(); }, true);
   $('settingsClose')?.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); closeSettingsSafe(); }, true);
   settings?.addEventListener('click', e => { if (e.target === settings) closeSettingsSafe(); });
+
+  $('saveSettings')?.addEventListener('click', e => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const max = $('maxTokens'), prompt = $('systemPrompt'), select = $('settingsModel');
+    const cap = Math.max(256, Number(max?.max) || 32768);
+    const requested = Number(max?.value) || 4096;
+    const n = Math.min(Math.max(256, requested), cap);
+    localStorage.setItem('fable-max-tokens', String(Math.round(n)));
+    localStorage.setItem('fable-system-prompt', prompt?.value || '');
+    if (select?.value) localStorage.setItem('fable-model', select.value);
+    try { window.renderModels?.(); } catch (_) {}
+    closeSettingsSafe();
+  }, true);
 
   const popover = $('modelPopover'), modelOptions = $('modelOptions'), modelSwitch = $('modelSwitch');
   if (popover && modelOptions && modelSwitch) {
