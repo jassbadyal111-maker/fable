@@ -18,7 +18,7 @@
   <main class="main">
     <header class="topbar"><button class="icon-btn menu-btn" id="openSidebar" aria-label="Open sidebar">☰</button><button class="model-switch" id="modelSwitch" aria-label="Select model"><span id="modelName">Loading model...</span><span class="chevron">⌄</span></button><div class="top-actions"><button class="icon-btn" id="topTheme" aria-label="Toggle theme">☾</button></div></header>
     <section class="conversation" id="conversation"><div class="welcome" id="welcome"><div class="welcome-mark">✳</div><h1>How can I help?</h1><p>What would you like to explore today?</p><div class="prompt-grid"><button class="prompt-card prompt-a" data-prompt="Help me write something"><span>✎</span><strong>Help me<br/>write something</strong></button><button class="prompt-card prompt-b" data-prompt="Explain a complex topic"><span>♧</span><strong>Explain a<br/>complex topic</strong></button><button class="prompt-card prompt-c" data-prompt="Summarize this for me"><span>▤</span><strong>Summarize<br/>this for me</strong></button><button class="prompt-card prompt-d" data-prompt="Help with coding"><span>&lt;/&gt;</span><strong>Help with<br/>coding</strong></button></div></div></section>
-    <form class="composer-wrap" id="composer"><div class="composer"><div class="composer-tools"><button type="button" aria-label="Attach file">⌕</button><button type="button" aria-label="Browse">◎</button><button type="button" aria-label="Mention">@</button></div><textarea id="input" rows="1" placeholder="Message Fable..." autocomplete="off"></textarea><div class="composer-right"><span id="charCount">0 / 200000</span><button class="send-btn" id="sendBtn" type="submit" aria-label="Send"><span>↑</span></button></div></div><div class="composer-note">Fable can make mistakes. Check important information.</div></form>
+    <form class="composer-wrap" id="composer"><div class="composer"><div class="composer-tools"><button type="button" aria-label="Attach file">⌕</button><button type="button" aria-label="Browse">◎</button><button type="button" aria-label="Mention">@</button></div><textarea id="input" rows="1" placeholder="Message Fable..." autocomplete="off"></textarea><div class="composer-right"><span id="charCount">0 / 200000</span><button class="send-btn" id="sendBtn" type="submit" aria-label="Send"><span class="send-glyph" aria-hidden="true"></span></button></div></div><div class="composer-note">Fable can make mistakes. Check important information.</div></form>
   </main>
 </div>
 <div class="model-popover hidden" id="modelPopover"><div class="popover-title">Choose a model</div><div id="modelOptions"></div></div>
@@ -35,5 +35,5 @@
     <button class="save-settings" id="saveSettings">Save settings</button>
   </aside>
 </div>
-<script src="/capability-runtime.js"></script><script src="/app.js"></script><script src="/ui-fixes.js"></script>
+<script src="/capability-runtime.js"></script><script src="/app.js"></script><script src="/syntax.js"></script><script src="/ui-fixes.js"></script>
 </body></html>
