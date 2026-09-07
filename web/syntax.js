@@ -1,0 +1,39 @@
+(()=>{
+  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]||c));
+  const aliases={py:'python',python3:'python',js:'javascript',mjs:'javascript',cjs:'javascript',ts:'typescript',tsx:'typescript',jsx:'javascript',sh:'bash',shell:'bash',zsh:'bash',yml:'yaml',md:'markdown',html:'markup',xml:'markup',svg:'markup',cs:'csharp',c++:'cpp',cc:'cpp',h:'cpp',hpp:'cpp',rb:'ruby',rs:'rust'};
+  const normalize=l=>aliases[(l||'').toLowerCase().trim()]||(l||'text').toLowerCase().trim();
+  const rules={
+    python:{kw:'and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield|True|False|None',types:'str|int|float|bool|list|dict|set|tuple|bytes|object'},
+    javascript:{kw:'const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|from|export|default|async|await|try|catch|finally|throw|typeof|instanceof|in|of|this|super|yield|true|false|null|undefined'},
+    typescript:{kw:'const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|implements|interface|type|enum|namespace|import|from|export|default|async|await|try|catch|finally|throw|typeof|instanceof|in|of|this|super|true|false|null|undefined|unknown|never|any|void|string|number|boolean'},
+    java:{kw:'public|private|protected|class|interface|extends|implements|static|final|abstract|void|int|long|double|float|boolean|byte|short|char|new|return|if|else|for|while|do|switch|case|break|continue|try|catch|throw|throws|import|package|null|true|false'},
+    c:{kw:'auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|int|long|register|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while|true|false|null'},
+    cpp:{kw:'auto|break|case|catch|class|const|constexpr|continue|default|delete|do|double|else|enum|explicit|extern|false|float|for|friend|if|inline|int|long|namespace|new|nullptr|operator|private|protected|public|return|short|signed|sizeof|static|struct|switch|template|this|throw|true|try|typedef|typename|union|unsigned|using|virtual|void|volatile|while'},
+    csharp:{kw:'abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|async|await|var'},
+    go:{kw:'break|default|func|interface|select|case|defer|go|map|struct|chan|else|goto|package|switch|const|fallthrough|if|range|type|continue|for|import|return|var|nil|true|false'},
+    rust:{kw:'as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|Some|None|Ok|Err'},
+    ruby:{kw:'alias|and|begin|break|case|class|def|defined|do|else|elsif|end|ensure|false|for|if|in|module|next|nil|not|or|redo|rescue|retry|return|self|super|then|true|undef|unless|until|when|while|yield'},
+    php:{kw:'abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|extends|final|finally|fn|for|foreach|function|global|if|implements|include|instanceof|interface|isset|namespace|new|null|or|private|protected|public|require|return|static|switch|throw|trait|true|false|try|unset|use|var|while|xor|yield'},
+    swift:{kw:'associatedtype|class|defer|enum|extension|fileprivate|final|for|func|get|guard|if|import|in|indirect|init|internal|let|mutating|nil|open|operator|private|protocol|public|repeat|required|return|set|static|struct|subscript|super|switch|throws|throw|try|typealias|var|where|while|weak|async|await|actor|some|true|false'},
+    kotlin:{kw:'as|break|class|continue|do|else|false|for|fun|if|in|interface|is|null|object|package|return|super|this|throw|true|try|typealias|typeof|val|var|when|while|by|catch|constructor|delegate|dynamic|field|file|finally|get|import|init|param|property|receiver|set|setparam|where|actual|abstract|annotation|companion|const|crossinline|data|enum|expect|external|final|infix|inline|inner|internal|lateinit|noinline|open|operator|out|override|private|protected|public|reified|sealed|suspend|tailrec|vararg'},
+    dart:{kw:'abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield'},
+    sql:{kw:'SELECT|FROM|WHERE|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TABLE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|AND|OR|NOT|NULL|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|DISTINCT|CASE|WHEN|THEN|ELSE|END|UNION|ALL|PRIMARY|KEY|INDEX|DATABASE'},
+    bash:{kw:'if|then|else|elif|fi|for|while|in|do|done|case|esac|function|export|local|return|select|time'},
+    yaml:{kw:'true|false|null|yes|no|on|off'},
+    markdown:{kw:'true|false|null'},
+    css:{kw:'important|inherit|initial|unset|none|block|inline|flex|grid|absolute|relative|fixed'},
+    json:{kw:'true|false|null'},
+    markup:{kw:'DOCTYPE'}
+  };
+  function highlight(code,lang){
+    const language=normalize(lang),raw=String(code??'');if(language==='text'||language==='plain'||language==='plaintext')return esc(raw);
+    if(language==='markup'){let s=esc(raw);s=s.replace(/(&lt;!--[\s\S]*?--&gt;)/g,'<span class="tok-com">$1</span>');s=s.replace(/(&lt;\/?)([A-Za-z][\w:-]*)([^&]*?)(\/??&gt;)/g,'<span class="tok-tag">$1$2$3$4</span>');return s}
+    const store=[];const protect=(re,cls,s)=>s.replace(re,m=>{const i=store.push(`<span class="tok-${cls}">${m}</span>`)-1;return `\uE000${i}\uE001`});
+    let s=esc(raw);s=protect(/(&quot;(?:\\.|[^&])*?&quot;|&#039;(?:\\.|[^&#039;])*?&#039;|`(?:\\.|[^`])*?`)/g,'str',s);s=protect(/(\/\*[\s\S]*?\*\/|\/\/[^\n]*|(^|\s)#.*$)/gm,'com',s);
+    if(language==='json')s=s.replace(/(&quot;(?:\\.|[^&])*?&quot;)(?=\s*:)/g,'<span class="tok-prop">$1</span>');
+    if(language==='css'){s=s.replace(/([^{}]+)(?=\s*\{)/g,'<span class="tok-sel">$1</span>');s=s.replace(/([.#]?[A-Za-z_-][\w-]*)(?=\s*:)/g,'<span class="tok-prop">$1</span>')}
+    const rule=rules[language]||rules.javascript;s=s.replace(new RegExp(`\\b(${rule.kw})\\b`,'g'),'<span class="tok-kw">$1</span>');s=s.replace(/\b\d+(?:\.\d+)?\b/g,'<span class="tok-num">$&</span>');
+    return s.replace(/\uE000(\d+)\uE001/g,(_,i)=>store[+i]);
+  }
+  window.highlight=highlight;
+})();
