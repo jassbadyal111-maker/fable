@@ -30,7 +30,7 @@ if not API_KEY:
     raise RuntimeError("EXPLABS_API_KEY is missing. Put it in .env")
 client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
 app = FastAPI(title="Fable Chat")
-_catalog_cache = {"at": 0.0, "items": {}}
+_catalog_cache = {"items": {}}
 
 
 def db():
@@ -46,6 +46,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT NOT NULL,role TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE);
         CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id,id);
         """)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(messages)").fetchall()}
+        if "reasoning_summary" not in columns:
+            conn.execute("ALTER TABLE messages ADD COLUMN reasoning_summary TEXT NOT NULL DEFAULT ''")
         conn.commit()
 
 
@@ -83,30 +86,21 @@ def discover_models():
 
 
 def catalog_detail(slug):
-    """Read the gateway's public model catalog so UI controls reflect real capabilities."""
     import time
     cached = _catalog_cache["items"].get(slug)
     if cached and time.time() - cached[0] < 300:
         return cached[1]
     url = f"{CATALOG_URL}/models/{slug}"
-    try:
-        req = UrlRequest(url, headers={"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"})
-        with urlopen(req, timeout=8) as response:
-            data = json.loads(response.read().decode("utf-8"))
-        _catalog_cache["items"][slug] = (time.time(), data)
-        return data
-    except (HTTPError, URLError, TimeoutError, ValueError):
-        # Public catalog reads should normally work without auth; retry without the key.
+    for headers in ({"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}, {"Accept": "application/json"}):
         try:
-            req = UrlRequest(url, headers={"Accept": "application/json"})
+            req = UrlRequest(url, headers=headers)
             with urlopen(req, timeout=8) as response:
                 data = json.loads(response.read().decode("utf-8"))
             _catalog_cache["items"][slug] = (time.time(), data)
             return data
         except Exception:
-            return None
-    except Exception:
-        return None
+            continue
+    return None
 
 
 def _nested(obj, *keys):
@@ -120,23 +114,15 @@ def _nested(obj, *keys):
 
 def normalize_model(slug):
     raw = catalog_detail(slug) or {}
-    # Catalog shapes have changed over time; accept the documented field names plus
-    # the common nested variants instead of inventing capabilities client-side.
     params = raw.get("supported_params") or raw.get("supported_parameters") or raw.get("parameters") or {}
     if isinstance(params, list):
         params = {str(x): True for x in params}
-    reasoning = raw.get("reasoning")
-    if not isinstance(reasoning, dict):
-        reasoning = {}
-    reasoning_levels = reasoning.get("levels") or reasoning.get("effort_levels") or []
-    if not reasoning_levels and isinstance(raw.get("reasoning_levels"), list):
-        reasoning_levels = raw["reasoning_levels"]
+    reasoning = raw.get("reasoning") if isinstance(raw.get("reasoning"), dict) else {}
+    reasoning_levels = reasoning.get("levels") or reasoning.get("effort_levels") or raw.get("reasoning_levels") or []
     supports_reasoning = bool(reasoning_levels) or bool(reasoning.get("supported")) or bool(raw.get("supports_reasoning")) or any(k in params for k in ("reasoning_effort", "reasoning"))
     if supports_reasoning and not reasoning_levels:
         reasoning_levels = ["low", "medium", "high"]
-    max_output = raw.get("max_output") or raw.get("max_output_tokens") or _nested(raw, "limits", "max_output") or _nested(raw, "limits", "max_output_tokens")
-    if not max_output:
-        max_output = DEFAULT_MAX_TOKENS
+    max_output = raw.get("max_output") or raw.get("max_output_tokens") or _nested(raw, "limits", "max_output") or _nested(raw, "limits", "max_output_tokens") or DEFAULT_MAX_TOKENS
     try:
         max_output = int(max_output)
     except (TypeError, ValueError):
@@ -205,7 +191,7 @@ def new_chat(payload: ChatCreate):
 def get_chat(chat_id: str):
     chat = ensure_chat(chat_id)
     with closing(db()) as conn:
-        messages = conn.execute("SELECT id,role,content,created_at FROM messages WHERE chat_id=? ORDER BY id", (chat_id,)).fetchall()
+        messages = conn.execute("SELECT id,role,content,reasoning_summary,created_at FROM messages WHERE chat_id=? ORDER BY id", (chat_id,)).fetchall()
     return {"chat": dict(chat), "messages": [dict(m) for m in messages]}
 
 
@@ -252,7 +238,7 @@ async def stream_message(chat_id: str, payload: MessageCreate, request: Request)
     timestamp = now()
     with closing(db()) as conn:
         count = conn.execute("SELECT COUNT(*) AS n FROM messages WHERE chat_id=?", (chat_id,)).fetchone()["n"]
-        conn.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)", (chat_id, "user", content, timestamp))
+        conn.execute("INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)", (chat_id, "user", content, "", timestamp))
         title = content.replace("\n", " ").strip()[:45] or "New chat"
         conn.execute("UPDATE chats SET title=?,model=?,updated_at=? WHERE id=?", (title if count == 0 else chat["title"], model, timestamp, chat_id))
         conn.commit()
@@ -275,8 +261,6 @@ async def stream_message(chat_id: str, payload: MessageCreate, request: Request)
                     continue
                 delta = chunk.choices[0].delta
                 text = getattr(delta, "content", None)
-                # Only provider-labelled summaries are exposed in the UI. Raw reasoning
-                # / reasoning_content is intentionally not rendered as chain-of-thought.
                 summary = getattr(delta, "reasoning_summary", None) or getattr(delta, "summary", None)
                 if summary:
                     reasoning_summary_parts.append(summary)
@@ -289,7 +273,7 @@ async def stream_message(chat_id: str, payload: MessageCreate, request: Request)
             reasoning_summary = "".join(reasoning_summary_parts)
             if answer:
                 with closing(db()) as conn:
-                    conn.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)", (chat_id, "assistant", answer, now()))
+                    conn.execute("INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)", (chat_id, "assistant", answer, reasoning_summary, now()))
                     conn.execute("UPDATE chats SET updated_at=? WHERE id=?", (now(), chat_id))
                     conn.commit()
             yield f"data: {json.dumps({'type':'done','content':answer,'reasoning_summary':reasoning_summary})}\n\n"
