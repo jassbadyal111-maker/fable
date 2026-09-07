@@ -2,23 +2,33 @@
   const cache=new Map();
   const nativeFetch=window.fetch.bind(window);
   const $=id=>document.getElementById(id);
-  const fmt=n=>n>=100000?`${Math.round(n/1000)}K`:n>=1000?`${Math.round(n/1000)}K`:String(n);
+  const fmt=n=>n>=1000000?`${Math.round(n/1000000)}M`:n>=100000?`${Math.round(n/1000)}K`:n>=1000?`${Math.round(n/1000)}K`:String(n);
+  const known={
+    'claude-fable-5':{max_output:128000,reasoning:true,reasoning_levels:['low','medium','high','xhigh','max'],reasoning_default:'medium'},
+    'claude-fable-5.1':{max_output:128000,reasoning:true,reasoning_levels:['low','medium','high','xhigh','max'],reasoning_default:'medium'}
+  };
+  function mergeKnown(model,cap){const k=known[model]||{};if(!cap)return k;const out={...k,...cap};if(Number(cap.max_output||0)<8192&&k.max_output)out.max_output=k.max_output;if(!cap.reasoning&&k.reasoning)out.reasoning=true;if(!Array.isArray(cap.reasoning_levels)||!cap.reasoning_levels.length)out.reasoning_levels=k.reasoning_levels||[];if(!cap.reasoning_default)out.reasoning_default=k.reasoning_default;return out}
   async function capability(model){
     if(!model)return null;
     if(cache.has(model))return cache.get(model);
-    try{const r=await nativeFetch(`/api/model/${encodeURIComponent(model)}`);if(!r.ok)throw Error();const data=await r.json();cache.set(model,data);return data}catch{return null}
+    try{const r=await nativeFetch(`/api/model/${encodeURIComponent(model)}`);if(!r.ok)throw Error();const data=mergeKnown(model,await r.json());cache.set(model,data);return data}catch{const fallback=known[model]||null;if(fallback)cache.set(model,fallback);return fallback}
   }
   function current(){return localStorage.getItem('fable-model')||$('settingsModel')?.value||''}
+  function updateScale(max){
+    const spans=document.querySelectorAll('.token-scale span');if(spans.length<2)return;
+    const values=[256,1024,4096,16384,32768,max].map(v=>Math.min(v,max));
+    spans.forEach((el,i)=>el.textContent=fmt(values[Math.min(i,values.length-1)]));
+  }
   function apply(cap){
     if(!cap)return;
-    const max=Math.max(1,Number(cap.max_output)||4096);
+    const max=Math.max(256,Number(cap.max_output)||4096);
     const saved=Math.min(max,Math.max(256,Number(localStorage.getItem('fable-max-tokens'))||4096));
     const input=$('maxTokens'),range=$('tokenRange'),out=$('tokenValue');
     if(input){input.max=max;input.value=saved}
     if(range){range.max=max;range.value=Math.min(saved,max);range.step=max>=10000?256:1}
     if(out)out.value=saved;
     if($('tokenLimitLabel'))$('tokenLimitLabel').textContent=`up to ${fmt(max)}`;
-    if($('tokenScaleMax'))$('tokenScaleMax').textContent=fmt(max);
+    updateScale(max);
     const card=$('reasoningSetting'),grid=$('effortGrid');
     if(!card||!grid)return;
     if(cap.reasoning&&Array.isArray(cap.reasoning_levels)&&cap.reasoning_levels.length){
