@@ -44,41 +44,71 @@ def discover_models():
     except requests.RequestException: pass
     return FALLBACK_MODELS
 
+def unwrap_catalog(data):
+    value=data
+    for _ in range(3):
+        if not isinstance(value,dict): break
+        for key in ('data','model','result'):
+            nested=value.get(key)
+            if isinstance(nested,dict) and (nested is not value):
+                value=nested; break
+        else: break
+    return value if isinstance(value,dict) else {}
+
 def catalog_detail(slug):
     cached=catalog_cache.get(slug)
     if cached and time.time()-cached[0]<300:return cached[1]
     try:
         r=session.get(f'{CATALOG_URL}/models/{slug}',headers=api_headers(),timeout=10)
-        if r.ok: data=r.json(); catalog_cache[slug]=(time.time(),data); return data
+        if r.ok:
+            data=unwrap_catalog(r.json()); catalog_cache[slug]=(time.time(),data); return data
     except requests.RequestException: pass
     return {}
 
 def first_int(*values):
     for v in values:
+        if isinstance(v,dict):
+            for k in ('value','max','limit','tokens','output','max_output','max_output_tokens'):
+                if k in v:
+                    n=first_int(v.get(k))
+                    if n:return n
         try:
-            n=int(v)
+            if isinstance(v,str):
+                s=v.strip().lower().replace(',','')
+                if s.endswith('k'): n=int(float(s[:-1])*1000)
+                elif s.endswith('m'): n=int(float(s[:-1])*1000000)
+                else:n=int(float(s))
+            else:n=int(v)
             if n>0:return n
-        except (TypeError,ValueError):pass
+        except (TypeError,ValueError): pass
     return DEFAULT_MAX_TOKENS
 
 def normalize_model(slug):
-    raw=catalog_detail(slug); params=raw.get('supported_params') or raw.get('supported_parameters') or raw.get('parameters') or {}
+    raw=catalog_detail(slug)
+    params=raw.get('supported_params') or raw.get('supported_parameters') or raw.get('parameters') or raw.get('supported') or {}
     if isinstance(params,list):params={str(x):True for x in params}
     if not isinstance(params,dict):params={}
-    reasoning=raw.get('reasoning'); levels=[]; default=raw.get('reasoning_default') or raw.get('default_reasoning_effort'); supported=False
+    reasoning=raw.get('reasoning')
+    capabilities=raw.get('capabilities') if isinstance(raw.get('capabilities'),dict) else {}
+    if reasoning is None: reasoning=capabilities.get('reasoning')
+    levels=[]; default=raw.get('reasoning_default') or raw.get('default_reasoning_effort') or capabilities.get('reasoning_default')
+    supported=False
     if isinstance(reasoning,dict):
         levels=reasoning.get('levels') or reasoning.get('effort_levels') or reasoning.get('reasoning_levels') or reasoning.get('efforts') or []
-        default=default or reasoning.get('default') or reasoning.get('default_effort'); supported=bool(reasoning.get('supported',True))
+        default=default or reasoning.get('default') or reasoning.get('default_effort')
+        supported=bool(reasoning.get('supported',True))
     elif isinstance(reasoning,list):levels=reasoning; supported=True
     elif isinstance(reasoning,str):levels=[x.strip() for x in reasoning.split(',') if x.strip()]; supported=True
     levels=raw.get('reasoning_levels') or raw.get('reasoning_effort_levels') or raw.get('effort_levels') or levels
     if isinstance(levels,str):levels=[x.strip() for x in levels.split(',') if x.strip()]
     levels=[str(x).lower() for x in levels if str(x).strip()]
-    supported=bool(supported or levels or 'reasoning_effort' in params or 'reasoning' in params)
+    supported=bool(supported or levels or 'reasoning_effort' in params or 'reasoning' in params or capabilities.get('reasoning'))
     if not default and levels:default='medium' if 'medium' in levels else levels[0]
     limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {}
-    max_output=first_int(raw.get('max_output'),raw.get('max_output_tokens'),raw.get('max_tokens'),limits.get('max_output'),limits.get('max_output_tokens'),limits.get('max_tokens'),raw.get('max_output_limit'),DEFAULT_MAX_TOKENS)
-    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':first_int(raw.get('context'),raw.get('context_window'),raw.get('max_context'),limits.get('context'),limits.get('context_window')),'reasoning':supported,'reasoning_levels':levels if supported else [],'reasoning_default':str(default).lower() if default else None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
+    limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
+    max_output=first_int(raw.get('max_output'),raw.get('max_output_tokens'),raw.get('max_tokens'),limits.get('max_output'),limits.get('max_output_tokens'),limits.get('max_tokens'),limit.get('output'),limit.get('max_output'),limit.get('max_tokens'),raw.get('max_output_limit'),raw.get('output_limit'),DEFAULT_MAX_TOKENS)
+    context=first_int(raw.get('context'),raw.get('context_window'),raw.get('max_context'),limits.get('context'),limits.get('context_window'),limit.get('context'),limit.get('context_window'))
+    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':supported,'reasoning_levels':levels if supported else [],'reasoning_default':str(default).lower() if default else None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
 
 def create_chat(model):
     cid=str(uuid.uuid4());t=now()
@@ -197,6 +227,9 @@ def stream_message(cid):
         finally:
             if upstream is not None:upstream.close()
     return Response(generate(),mimetype='text/event-stream',headers={'Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no','Connection':'keep-alive'})
+
+@app.get('/api/health')
+def health():return jsonify(ok=True,service='fable',provider=BASE_URL)
 
 @app.route('/manifest.webmanifest')
 def manifest():return send_from_directory(WEB_DIR,'manifest.webmanifest',mimetype='application/manifest+json')
