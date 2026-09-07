@@ -36,7 +36,11 @@
     if(init?.method==='POST'&&url.includes('/api/chats/')&&url.endsWith('/messages')&&typeof init.body==='string'){
       try{
         const body=JSON.parse(init.body),model=body.model||current(),cap=await capability(model);
-        if(cap){body.max_tokens=Math.min(Number(body.max_tokens)||4096,Number(cap.max_output)||500000);if(cap.reasoning&&cap.reasoning_levels?.length){const effort=localStorage.getItem(`fable-reasoning-${model}`)||cap.reasoning_default||cap.reasoning_levels[0];if(effort)body.reasoning_effort=effort}else delete body.reasoning_effort;init={...init,body:JSON.stringify(body)};
+        if(cap){
+          const desired=Number(localStorage.getItem('fable-max-tokens'))||Number(body.max_tokens)||4096;
+          body.max_tokens=Math.min(Math.max(1,desired),Number(cap.max_output)||500000);
+          if(cap.reasoning&&cap.reasoning_levels?.length){const effort=localStorage.getItem(`fable-reasoning-${model}`)||cap.reasoning_default||cap.reasoning_levels[0];if(effort)body.reasoning_effort=effort}else delete body.reasoning_effort;
+          init={...init,body:JSON.stringify(body)};
         }
       }catch{}
     }
