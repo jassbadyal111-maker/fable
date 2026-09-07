@@ -50,9 +50,8 @@ def unwrap_catalog(data):
         if not isinstance(value,dict): break
         for key in ('data','model','result'):
             nested=value.get(key)
-            if isinstance(nested,dict) and (nested is not value):
-                value=nested; break
-        else: break
+            if isinstance(nested,dict) and nested is not value:value=nested;break
+        else:break
     return value if isinstance(value,dict) else {}
 
 def catalog_detail(slug):
@@ -61,8 +60,8 @@ def catalog_detail(slug):
     try:
         r=session.get(f'{CATALOG_URL}/models/{slug}',headers=api_headers(),timeout=10)
         if r.ok:
-            data=unwrap_catalog(r.json()); catalog_cache[slug]=(time.time(),data); return data
-    except requests.RequestException: pass
+            data=unwrap_catalog(r.json());catalog_cache[slug]=(time.time(),data);return data
+    except requests.RequestException:pass
     return {}
 
 def first_int(*values):
@@ -75,37 +74,32 @@ def first_int(*values):
         try:
             if isinstance(v,str):
                 s=v.strip().lower().replace(',','')
-                if s.endswith('k'): n=int(float(s[:-1])*1000)
-                elif s.endswith('m'): n=int(float(s[:-1])*1000000)
+                if s.endswith('k'):n=int(float(s[:-1])*1000)
+                elif s.endswith('m'):n=int(float(s[:-1])*1000000)
                 else:n=int(float(s))
             else:n=int(v)
             if n>0:return n
-        except (TypeError,ValueError): pass
+        except (TypeError,ValueError):pass
     return DEFAULT_MAX_TOKENS
 
 def normalize_model(slug):
-    raw=catalog_detail(slug)
-    params=raw.get('supported_params') or raw.get('supported_parameters') or raw.get('parameters') or raw.get('supported') or {}
+    raw=catalog_detail(slug);params=raw.get('supported_params') or raw.get('supported_parameters') or raw.get('parameters') or raw.get('supported') or {}
     if isinstance(params,list):params={str(x):True for x in params}
     if not isinstance(params,dict):params={}
-    reasoning=raw.get('reasoning')
-    capabilities=raw.get('capabilities') if isinstance(raw.get('capabilities'),dict) else {}
-    if reasoning is None: reasoning=capabilities.get('reasoning')
-    levels=[]; default=raw.get('reasoning_default') or raw.get('default_reasoning_effort') or capabilities.get('reasoning_default')
-    supported=False
+    reasoning=raw.get('reasoning');capabilities=raw.get('capabilities') if isinstance(raw.get('capabilities'),dict) else {}
+    if reasoning is None:reasoning=capabilities.get('reasoning')
+    levels=[];default=raw.get('reasoning_default') or raw.get('default_reasoning_effort') or capabilities.get('reasoning_default');supported=False
     if isinstance(reasoning,dict):
         levels=reasoning.get('levels') or reasoning.get('effort_levels') or reasoning.get('reasoning_levels') or reasoning.get('efforts') or []
-        default=default or reasoning.get('default') or reasoning.get('default_effort')
-        supported=bool(reasoning.get('supported',True))
-    elif isinstance(reasoning,list):levels=reasoning; supported=True
-    elif isinstance(reasoning,str):levels=[x.strip() for x in reasoning.split(',') if x.strip()]; supported=True
+        default=default or reasoning.get('default') or reasoning.get('default_effort');supported=bool(reasoning.get('supported',True))
+    elif isinstance(reasoning,list):levels=reasoning;supported=True
+    elif isinstance(reasoning,str):levels=[x.strip() for x in reasoning.split(',') if x.strip()];supported=True
     levels=raw.get('reasoning_levels') or raw.get('reasoning_effort_levels') or raw.get('effort_levels') or levels
     if isinstance(levels,str):levels=[x.strip() for x in levels.split(',') if x.strip()]
     levels=[str(x).lower() for x in levels if str(x).strip()]
     supported=bool(supported or levels or 'reasoning_effort' in params or 'reasoning' in params or capabilities.get('reasoning'))
     if not default and levels:default='medium' if 'medium' in levels else levels[0]
-    limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {}
-    limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
+    limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {};limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
     max_output=first_int(raw.get('max_output'),raw.get('max_output_tokens'),raw.get('max_tokens'),limits.get('max_output'),limits.get('max_output_tokens'),limits.get('max_tokens'),limit.get('output'),limit.get('max_output'),limit.get('max_tokens'),raw.get('max_output_limit'),raw.get('output_limit'),DEFAULT_MAX_TOKENS)
     context=first_int(raw.get('context'),raw.get('context_window'),raw.get('max_context'),limits.get('context'),limits.get('context_window'),limit.get('context'),limit.get('context_window'))
     return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':supported,'reasoning_levels':levels if supported else [],'reasoning_default':str(default).lower() if default else None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
@@ -120,25 +114,40 @@ def get_chat_row(cid):
 
 def sse(obj):return 'data: '+json.dumps(obj,ensure_ascii=False)+'\n\n'
 
+def public_reasoning_summary(value):
+    if isinstance(value,str):return value
+    if isinstance(value,dict):
+        for k in ('text','summary','summary_text','reasoning_summary','content'):
+            v=value.get(k)
+            if isinstance(v,str) and v.strip():return v
+            if isinstance(v,list):
+                out=''.join(public_reasoning_summary(x) for x in v)
+                if out:return out
+    if isinstance(value,list):
+        out=''.join(public_reasoning_summary(x) for x in value)
+        if out:return out
+    return ''
+
 def summary_from_delta(delta):
-    def text(v):
-        if isinstance(v,str):return v
-        if isinstance(v,dict):return next((v[k] for k in ('text','summary','content') if isinstance(v.get(k),str)),'')
-        if isinstance(v,list):return ''.join(text(x) for x in v)
-        return ''
     for k in ('reasoning_summary','summary'):
-        t=text(delta.get(k));
+        t=public_reasoning_summary(delta.get(k))
         if t:return t
     r=delta.get('reasoning')
     if isinstance(r,dict):
         for k in ('summary','summary_text','reasoning_summary'):
-            t=text(r.get(k));
+            t=public_reasoning_summary(r.get(k))
             if t:return t
+    return ''
+
+def summary_from_chunk(chunk):
+    for k in ('reasoning_summary','summary'):
+        t=public_reasoning_summary(chunk.get(k))
+        if t:return t
     return ''
 
 @app.get('/api/config')
 def config():
-    ids=discover_models(); models=[{'id':x,'name':x,'max_output':DEFAULT_MAX_TOKENS,'reasoning':False,'reasoning_levels':[],'reasoning_default':None} for x in ids]; default=DEFAULT_MODEL if DEFAULT_MODEL in ids else ids[0]
+    ids=discover_models();models=[{'id':x,'name':x,'max_output':DEFAULT_MAX_TOKENS,'reasoning':False,'reasoning_levels':[],'reasoning_default':None} for x in ids];default=DEFAULT_MODEL if DEFAULT_MODEL in ids else ids[0]
     return jsonify(models=models,default_model=default,default_max_tokens=DEFAULT_MAX_TOKENS,default_system_prompt=DEFAULT_SYSTEM_PROMPT)
 
 @app.get('/api/model/<path:slug>')
@@ -153,7 +162,7 @@ def chats():
 
 @app.post('/api/chats')
 def new_chat():
-    p=request.get_json(silent=True) or {}; model=p.get('model') or DEFAULT_MODEL
+    p=request.get_json(silent=True) or {};model=p.get('model') or DEFAULT_MODEL
     if model not in discover_models():return jsonify(error='Unsupported model'),400
     return jsonify(id=create_chat(model),title='New chat',model=model)
 
@@ -182,23 +191,23 @@ def delete(cid):
 def stream_message(cid):
     chat=get_chat_row(cid)
     if not chat:return jsonify(error='Chat not found'),404
-    p=request.get_json(silent=True) or {}; content=str(p.get('content','')).strip()
+    p=request.get_json(silent=True) or {};content=str(p.get('content','')).strip()
     if not content:return jsonify(error='Message cannot be empty'),400
     model=p.get('model') or chat['model']
     if model not in discover_models():return jsonify(error='Unsupported model'),400
     cap=normalize_model(model)
     try:requested=int(p.get('max_tokens') or cap['max_output'])
     except (TypeError,ValueError):requested=cap['max_output']
-    max_tokens=min(max(1,requested),cap['max_output']); effort=str(p.get('reasoning_effort') or '').lower().strip()
+    max_tokens=min(max(1,requested),cap['max_output']);effort=str(p.get('reasoning_effort') or '').lower().strip()
     if effort and (not cap['reasoning'] or effort not in cap['reasoning_levels']):return jsonify(error='Reasoning effort is not supported by this model'),400
-    system=str(p.get('system_prompt') or DEFAULT_SYSTEM_PROMPT).strip()[:20000]; t=now()
+    system=str(p.get('system_prompt') or DEFAULT_SYSTEM_PROMPT).strip()[:20000];t=now()
     with closing(db()) as c:
         count=c.execute('SELECT COUNT(*) n FROM messages WHERE chat_id=?',(cid,)).fetchone()['n'];c.execute('INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)',(cid,'user',content,'',t));title=content.replace('\n',' ').strip()[:45] or 'New chat';c.execute('UPDATE chats SET title=?,model=?,updated_at=? WHERE id=?',(title if count==0 else chat['title'],model,t,cid));c.commit();history=c.execute('SELECT role,content FROM messages WHERE chat_id=? ORDER BY id',(cid,)).fetchall()
     messages=[{'role':'system','content':system}]+[{'role':x['role'],'content':x['content']} for x in history]
     provider={'model':model,'stream':True,'messages':messages,'max_tokens':max_tokens}
     if effort:provider['reasoning_effort']=effort
     def generate():
-        answer=[]; reasoning=[]; upstream=None
+        answer=[];reasoning=[];upstream=None
         try:
             upstream=session.post(f'{BASE_URL}/chat/completions',headers=api_headers(),json=provider,stream=True,timeout=(15,900))
             if not upstream.ok:
@@ -212,9 +221,11 @@ def stream_message(cid):
                 if line=='[DONE]':break
                 try:chunk=json.loads(line)
                 except json.JSONDecodeError:continue
+                chunk_summary=summary_from_chunk(chunk)
+                if chunk_summary:reasoning.append(chunk_summary);yield sse({'type':'reasoning_summary','text':chunk_summary})
                 choices=chunk.get('choices') or []
                 if not choices:continue
-                delta=choices[0].get('delta') or {}; summary=summary_from_delta(delta); text=delta.get('content')
+                delta=choices[0].get('delta') or {};summary=summary_from_delta(delta);text=delta.get('content')
                 if summary:reasoning.append(summary);yield sse({'type':'reasoning_summary','text':summary})
                 if text:answer.append(str(text));yield sse({'type':'token','text':str(text)})
             final=''.join(answer);rs=''.join(reasoning)
@@ -230,7 +241,6 @@ def stream_message(cid):
 
 @app.get('/api/health')
 def health():return jsonify(ok=True,service='fable',provider=BASE_URL)
-
 @app.route('/manifest.webmanifest')
 def manifest():return send_from_directory(WEB_DIR,'manifest.webmanifest',mimetype='application/manifest+json')
 @app.route('/sw.js')
