@@ -13,11 +13,12 @@
       const stored = Number(localStorage.getItem('fable-max-tokens'));
       const n = Number.isFinite(stored) ? Math.min(Math.max(stored, 256), cap) : Math.min(4096, cap);
       if (max) { max.max = cap; max.value = n; }
-      if (range) { range.max = cap; range.value = n; }
+      if (range) { range.max = cap; range.value = n; range.step = cap >= 10000 ? 256 : 1; }
       if (value) value.value = n;
       if (modelSelect) modelSelect.value = model.id;
     }
-    if (prompt) prompt.value = localStorage.getItem('fable-system-prompt') ?? (window.state?.config?.default_system_prompt || '');
+    const appState = window.fableState;
+    if (prompt) prompt.value = localStorage.getItem('fable-system-prompt') ?? (appState?.config?.default_system_prompt || '');
     settings?.classList.remove('hidden');
     document.body.classList.add('settings-open');
     $('settingsClose')?.focus();
@@ -26,8 +27,8 @@
     settings?.classList.add('hidden');
     document.body.classList.remove('settings-open');
   }
-  $('settingsBtn')?.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openSettingsSafe(); }, true);
-  $('settingsClose')?.addEventListener('click', closeSettingsSafe, true);
+  $('settingsBtn')?.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); openSettingsSafe(); }, true);
+  $('settingsClose')?.addEventListener('click', e => { e.preventDefault(); e.stopImmediatePropagation(); closeSettingsSafe(); }, true);
   settings?.addEventListener('click', e => { if (e.target === settings) closeSettingsSafe(); });
 
   const popover = $('modelPopover'), modelOptions = $('modelOptions'), modelSwitch = $('modelSwitch');
@@ -80,7 +81,7 @@
   const settingsIcon = $('settingsBtn');
   if (settingsIcon) { const old = settingsIcon.querySelector('span'); if (old) old.outerHTML = icons.settingsBtn; settingsIcon.classList.add('vector-icon'); }
   const theme = $('topTheme'); if (theme) { theme.innerHTML = icons.topTheme; theme.classList.add('vector-icon'); }
-  window.addEventListener('load', () => { const send = $('sendBtn'); if (send && !window.state?.streaming) send.innerHTML = icons.send; });
+  window.addEventListener('load', () => { const send = $('sendBtn'); if (send && !window.fableState?.streaming) send.innerHTML = icons.send; });
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
