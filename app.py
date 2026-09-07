@@ -20,34 +20,34 @@ DEFAULT_MAX_TOKENS=int(os.getenv('FABLE_MAX_TOKENS','4096'))
 DEFAULT_SYSTEM_PROMPT=os.getenv('FABLE_SYSTEM_PROMPT','You are Fable, a helpful AI assistant. Be direct, accurate, and conversational.')
 if not API_KEY: raise RuntimeError('EXPLABS_API_KEY is missing. Put it in .env')
 app=Flask(__name__,static_folder=str(WEB_DIR),static_url_path='')
-session=requests.Session(); model_cache={'at':0,'ids':[]}; catalog_cache={}
+session=requests.Session();model_cache={'at':0,'ids':[]};catalog_cache={}
 
 def db():
-    c=sqlite3.connect(DB_PATH); c.row_factory=sqlite3.Row; return c
+    c=sqlite3.connect(DB_PATH);c.row_factory=sqlite3.Row;return c
 
-def now(): return datetime.now(timezone.utc).isoformat()
-def api_headers(): return {'Authorization':f'Bearer {API_KEY}','Accept':'application/json','Content-Type':'application/json'}
+def now():return datetime.now(timezone.utc).isoformat()
+def api_headers():return {'Authorization':f'Bearer {API_KEY}','Accept':'application/json','Content-Type':'application/json'}
 
 def init_db():
     with closing(db()) as c:
         c.executescript('CREATE TABLE IF NOT EXISTS chats (id TEXT PRIMARY KEY,title TEXT NOT NULL,model TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT NOT NULL,role TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE); CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id,id);')
-        if 'reasoning_summary' not in {r[1] for r in c.execute('PRAGMA table_info(messages)')}: c.execute("ALTER TABLE messages ADD COLUMN reasoning_summary TEXT NOT NULL DEFAULT ''")
+        if 'reasoning_summary' not in {r[1] for r in c.execute('PRAGMA table_info(messages)')}:c.execute("ALTER TABLE messages ADD COLUMN reasoning_summary TEXT NOT NULL DEFAULT ''")
         c.commit()
 init_db()
 
 def discover_models():
     if model_cache['ids'] and time.time()-model_cache['at']<60:return model_cache['ids']
     try:
-        r=session.get(f'{BASE_URL}/models',headers=api_headers(),timeout=12); r.raise_for_status(); data=r.json(); items=data.get('data',data if isinstance(data,list) else [])
+        r=session.get(f'{BASE_URL}/models',headers=api_headers(),timeout=12);r.raise_for_status();data=r.json();items=data.get('data',data if isinstance(data,list) else [])
         ids=[str(x['id']) for x in items if isinstance(x,dict) and x.get('id')]
-        if ids:model_cache.update(at=time.time(),ids=ids); return ids
-    except requests.RequestException: pass
+        if ids:model_cache.update(at=time.time(),ids=ids);return ids
+    except requests.RequestException:pass
     return FALLBACK_MODELS
 
 def unwrap_catalog(data):
     value=data
     for _ in range(3):
-        if not isinstance(value,dict): break
+        if not isinstance(value,dict):break
         for key in ('data','model','result'):
             nested=value.get(key)
             if isinstance(nested,dict) and nested is not value:value=nested;break
@@ -83,26 +83,10 @@ def first_int(*values):
     return DEFAULT_MAX_TOKENS
 
 def normalize_model(slug):
-    raw=catalog_detail(slug);params=raw.get('supported_params') or raw.get('supported_parameters') or raw.get('parameters') or raw.get('supported') or {}
-    if isinstance(params,list):params={str(x):True for x in params}
-    if not isinstance(params,dict):params={}
-    reasoning=raw.get('reasoning');capabilities=raw.get('capabilities') if isinstance(raw.get('capabilities'),dict) else {}
-    if reasoning is None:reasoning=capabilities.get('reasoning')
-    levels=[];default=raw.get('reasoning_default') or raw.get('default_reasoning_effort') or capabilities.get('reasoning_default');supported=False
-    if isinstance(reasoning,dict):
-        levels=reasoning.get('levels') or reasoning.get('effort_levels') or reasoning.get('reasoning_levels') or reasoning.get('efforts') or []
-        default=default or reasoning.get('default') or reasoning.get('default_effort');supported=bool(reasoning.get('supported',True))
-    elif isinstance(reasoning,list):levels=reasoning;supported=True
-    elif isinstance(reasoning,str):levels=[x.strip() for x in reasoning.split(',') if x.strip()];supported=True
-    levels=raw.get('reasoning_levels') or raw.get('reasoning_effort_levels') or raw.get('effort_levels') or levels
-    if isinstance(levels,str):levels=[x.strip() for x in levels.split(',') if x.strip()]
-    levels=[str(x).lower() for x in levels if str(x).strip()]
-    supported=bool(supported or levels or 'reasoning_effort' in params or 'reasoning' in params or capabilities.get('reasoning'))
-    if not default and levels:default='medium' if 'medium' in levels else levels[0]
-    limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {};limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
+    raw=catalog_detail(slug);limits=raw.get('limits') if isinstance(raw.get('limits'),dict) else {};limit=raw.get('limit') if isinstance(raw.get('limit'),dict) else {}
     max_output=first_int(raw.get('max_output'),raw.get('max_output_tokens'),raw.get('max_tokens'),limits.get('max_output'),limits.get('max_output_tokens'),limits.get('max_tokens'),limit.get('output'),limit.get('max_output'),limit.get('max_tokens'),raw.get('max_output_limit'),raw.get('output_limit'),DEFAULT_MAX_TOKENS)
     context=first_int(raw.get('context'),raw.get('context_window'),raw.get('max_context'),limits.get('context'),limits.get('context_window'),limit.get('context'),limit.get('context_window'))
-    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':supported,'reasoning_levels':levels if supported else [],'reasoning_default':str(default).lower() if default else None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
+    return {'id':slug,'name':raw.get('display_name') or raw.get('name') or slug,'max_output':max_output,'context':context,'reasoning':False,'reasoning_levels':[],'reasoning_default':None,'catalog_url':f'https://platform.experientiallabs.ai/models/{slug}'}
 
 def create_chat(model):
     cid=str(uuid.uuid4());t=now()
@@ -111,39 +95,7 @@ def create_chat(model):
 
 def get_chat_row(cid):
     with closing(db()) as c:return c.execute('SELECT * FROM chats WHERE id=?',(cid,)).fetchone()
-
 def sse(obj):return 'data: '+json.dumps(obj,ensure_ascii=False)+'\n\n'
-
-def public_reasoning_summary(value):
-    if isinstance(value,str):return value
-    if isinstance(value,dict):
-        for k in ('text','summary','summary_text','reasoning_summary','content'):
-            v=value.get(k)
-            if isinstance(v,str) and v.strip():return v
-            if isinstance(v,list):
-                out=''.join(public_reasoning_summary(x) for x in v)
-                if out:return out
-    if isinstance(value,list):
-        out=''.join(public_reasoning_summary(x) for x in value)
-        if out:return out
-    return ''
-
-def summary_from_delta(delta):
-    for k in ('reasoning_summary','summary'):
-        t=public_reasoning_summary(delta.get(k))
-        if t:return t
-    r=delta.get('reasoning')
-    if isinstance(r,dict):
-        for k in ('summary','summary_text','reasoning_summary'):
-            t=public_reasoning_summary(r.get(k))
-            if t:return t
-    return ''
-
-def summary_from_chunk(chunk):
-    for k in ('reasoning_summary','summary'):
-        t=public_reasoning_summary(chunk.get(k))
-        if t:return t
-    return ''
 
 @app.get('/api/config')
 def config():
@@ -170,7 +122,7 @@ def new_chat():
 def chat(cid):
     row=get_chat_row(cid)
     if not row:return jsonify(error='Chat not found'),404
-    with closing(db()) as c:msgs=c.execute('SELECT id,role,content,reasoning_summary,created_at FROM messages WHERE chat_id=? ORDER BY id',(cid,)).fetchall()
+    with closing(db()) as c:msgs=c.execute('SELECT id,role,content,created_at FROM messages WHERE chat_id=? ORDER BY id',(cid,)).fetchall()
     return jsonify(chat=dict(row),messages=[dict(x) for x in msgs])
 
 @app.patch('/api/chats/<cid>')
@@ -198,16 +150,17 @@ def stream_message(cid):
     cap=normalize_model(model)
     try:requested=int(p.get('max_tokens') or cap['max_output'])
     except (TypeError,ValueError):requested=cap['max_output']
-    max_tokens=min(max(1,requested),cap['max_output']);effort=str(p.get('reasoning_effort') or '').lower().strip()
-    if effort and (not cap['reasoning'] or effort not in cap['reasoning_levels']):return jsonify(error='Reasoning effort is not supported by this model'),400
+    max_tokens=min(max(1,requested),cap['max_output'])
     system=str(p.get('system_prompt') or DEFAULT_SYSTEM_PROMPT).strip()[:20000];t=now()
     with closing(db()) as c:
-        count=c.execute('SELECT COUNT(*) n FROM messages WHERE chat_id=?',(cid,)).fetchone()['n'];c.execute('INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)',(cid,'user',content,'',t));title=content.replace('\n',' ').strip()[:45] or 'New chat';c.execute('UPDATE chats SET title=?,model=?,updated_at=? WHERE id=?',(title if count==0 else chat['title'],model,t,cid));c.commit();history=c.execute('SELECT role,content FROM messages WHERE chat_id=? ORDER BY id',(cid,)).fetchall()
+        count=c.execute('SELECT COUNT(*) n FROM messages WHERE chat_id=?',(cid,)).fetchone()['n']
+        c.execute('INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)',(cid,'user',content,'',t))
+        title=content.replace('\n',' ').strip()[:45] or 'New chat';c.execute('UPDATE chats SET title=?,model=?,updated_at=? WHERE id=?',(title if count==0 else chat['title'],model,t,cid));c.commit()
+        history=c.execute('SELECT role,content FROM messages WHERE chat_id=? ORDER BY id',(cid,)).fetchall()
     messages=[{'role':'system','content':system}]+[{'role':x['role'],'content':x['content']} for x in history]
     provider={'model':model,'stream':True,'messages':messages,'max_tokens':max_tokens}
-    if effort:provider['reasoning_effort']=effort
     def generate():
-        answer=[];reasoning=[];upstream=None
+        answer=[];upstream=None
         try:
             upstream=session.post(f'{BASE_URL}/chat/completions',headers=api_headers(),json=provider,stream=True,timeout=(15,900))
             if not upstream.ok:
@@ -221,17 +174,14 @@ def stream_message(cid):
                 if line=='[DONE]':break
                 try:chunk=json.loads(line)
                 except json.JSONDecodeError:continue
-                chunk_summary=summary_from_chunk(chunk)
-                if chunk_summary:reasoning.append(chunk_summary);yield sse({'type':'reasoning_summary','text':chunk_summary})
                 choices=chunk.get('choices') or []
                 if not choices:continue
-                delta=choices[0].get('delta') or {};summary=summary_from_delta(delta);text=delta.get('content')
-                if summary:reasoning.append(summary);yield sse({'type':'reasoning_summary','text':summary})
+                delta=choices[0].get('delta') or {};text=delta.get('content')
                 if text:answer.append(str(text));yield sse({'type':'token','text':str(text)})
-            final=''.join(answer);rs=''.join(reasoning)
+            final=''.join(answer)
             if final:
-                with closing(db()) as c:c.execute('INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)',(cid,'assistant',final,rs,now()));c.execute('UPDATE chats SET updated_at=? WHERE id=?',(now(),cid));c.commit()
-            yield sse({'type':'done','content':final,'reasoning_summary':rs})
+                with closing(db()) as c:c.execute('INSERT INTO messages(chat_id,role,content,reasoning_summary,created_at) VALUES(?,?,?,?,?)',(cid,'assistant',final,'',now()));c.execute('UPDATE chats SET updated_at=? WHERE id=?',(now(),cid));c.commit()
+            yield sse({'type':'done','content':final})
         except GeneratorExit:raise
         except requests.RequestException as e:yield sse({'type':'error','message':f'Provider request failed: {e}'})
         except Exception as e:yield sse({'type':'error','message':str(e)})
